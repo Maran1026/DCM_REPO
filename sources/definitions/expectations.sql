@@ -1,3 +1,4 @@
+-- Data quality expectations: null checks and duplicate detection
 ATTACH DATA METRIC FUNCTION SNOWFLAKE.CORE.NULL_COUNT
     TO TABLE {{db}}.RAW.CUSTOMERS
     ON (CUSTOMER_ID)
