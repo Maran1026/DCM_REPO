@@ -70,6 +70,7 @@ jobs:
         run: |
           snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_TEST.ANALYTICS.DT_CUSTOMER_ORDERS REFRESH" -c dcm_test
           snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_TEST.ANALYTICS.DT_DAILY_REVENUE REFRESH" -c dcm_test
+          snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_TEST.ANALYTICS.DT_ORDER_ITEM_SUMMARY REFRESH" -c dcm_test
 
       - name: Validate Deployment
         run: |
@@ -148,6 +149,7 @@ jobs:
         run: |
           snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_PROD.ANALYTICS.DT_CUSTOMER_ORDERS REFRESH" -c dcm_prod
           snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_PROD.ANALYTICS.DT_DAILY_REVENUE REFRESH" -c dcm_prod
+          snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_PROD.ANALYTICS.DT_ORDER_ITEM_SUMMARY REFRESH" -c dcm_prod
 
       - name: Validate Deployment
         run: |
