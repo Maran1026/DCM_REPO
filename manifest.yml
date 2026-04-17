@@ -1,3 +1,4 @@
+# DCM GitOps Project - CI/CD with key-pair auth
 manifest_version: 2
 type: DCM_PROJECT
 default_target: 'DEV'

@@ -26,15 +26,33 @@ jobs:
         with:
           cli-version: 'latest'
 
-      - name: Authenticate via OIDC
+      - name: Configure Snowflake Connection
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER }}
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
         run: |
-          snow connection add \
-            --connection-name dcm_test \
-            --account ${{ vars.SNOWFLAKE_ACCOUNT }} \
-            --user ${{ vars.SNOWFLAKE_USER }} \
-            --authenticator externalbrowser \
-            --role DCM_TEST_DEPLOYER \
-            --warehouse SNOWFLAKE_INTELLIGENCE_WH
+          mkdir -p ~/.snowflake
+          cat > ~/.snowflake/config.toml << 'TOML'
+          [connections.dcm_test]
+          account = "${SNOWFLAKE_ACCOUNT}"
+          user = "${SNOWFLAKE_USER}"
+          role = "DCM_TEST_DEPLOYER"
+          warehouse = "SNOWFLAKE_INTELLIGENCE_WH"
+          authenticator = "SNOWFLAKE_JWT"
+          TOML
+          # Replace placeholders with actual values
+          sed -i "s/\${SNOWFLAKE_ACCOUNT}/$SNOWFLAKE_ACCOUNT/" ~/.snowflake/config.toml
+          sed -i "s/\${SNOWFLAKE_USER}/$SNOWFLAKE_USER/" ~/.snowflake/config.toml
+          # Write private key to file
+          echo "$SNOWFLAKE_PRIVATE_KEY" > ~/.snowflake/dcm_test_key.p8
+          chmod 600 ~/.snowflake/dcm_test_key.p8
+          # Add private key path to config
+          echo 'private_key_file = "~/.snowflake/dcm_test_key.p8"' >> ~/.snowflake/config.toml
+          chmod 600 ~/.snowflake/config.toml
+
+      - name: Verify Connection
+        run: snow connection test -c dcm_test
 
       - name: Run DCM Plan for TEST
         run: snow dcm plan --target TEST --save-output -c dcm_test
@@ -86,15 +104,30 @@ jobs:
         with:
           cli-version: 'latest'
 
-      - name: Authenticate via OIDC
+      - name: Configure Snowflake Connection
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER }}
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
         run: |
-          snow connection add \
-            --connection-name dcm_prod \
-            --account ${{ vars.SNOWFLAKE_ACCOUNT }} \
-            --user ${{ vars.SNOWFLAKE_USER }} \
-            --authenticator externalbrowser \
-            --role DCM_PROD_DEPLOYER \
-            --warehouse SNOWFLAKE_INTELLIGENCE_WH
+          mkdir -p ~/.snowflake
+          cat > ~/.snowflake/config.toml << 'TOML'
+          [connections.dcm_prod]
+          account = "${SNOWFLAKE_ACCOUNT}"
+          user = "${SNOWFLAKE_USER}"
+          role = "DCM_PROD_DEPLOYER"
+          warehouse = "SNOWFLAKE_INTELLIGENCE_WH"
+          authenticator = "SNOWFLAKE_JWT"
+          TOML
+          sed -i "s/\${SNOWFLAKE_ACCOUNT}/$SNOWFLAKE_ACCOUNT/" ~/.snowflake/config.toml
+          sed -i "s/\${SNOWFLAKE_USER}/$SNOWFLAKE_USER/" ~/.snowflake/config.toml
+          echo "$SNOWFLAKE_PRIVATE_KEY" > ~/.snowflake/dcm_prod_key.p8
+          chmod 600 ~/.snowflake/dcm_prod_key.p8
+          echo 'private_key_file = "~/.snowflake/dcm_prod_key.p8"' >> ~/.snowflake/config.toml
+          chmod 600 ~/.snowflake/config.toml
+
+      - name: Verify Connection
+        run: snow connection test -c dcm_prod
 
       - name: Run DCM Plan for PROD
         run: snow dcm plan --target PROD --save-output -c dcm_prod

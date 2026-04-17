@@ -1,3 +1,4 @@
+-- Access control: database roles, warehouse role, and grants
 DEFINE DATABASE ROLE {{db}}.ADMIN
     COMMENT = 'Full control: DDL + DML - {{env}}';
 
