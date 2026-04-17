@@ -1,0 +1,51 @@
+manifest_version: 2
+type: DCM_PROJECT
+default_target: 'DEV'
+
+targets:
+  DEV:
+    account_identifier: CTA53801
+    project_name: 'GITOPS_PROJECT_DEV.DCM.GITOPS_PROJECT_DEV'
+    project_owner: SYSADMIN
+    templating_config: 'DEV'
+  TEST:
+    account_identifier: CTA53801
+    project_name: 'GITOPS_PROJECT_TEST.DCM.GITOPS_PROJECT_TEST'
+    project_owner: DCM_TEST_DEPLOYER
+    templating_config: 'TEST'
+  PROD:
+    account_identifier: CTA53801
+    project_name: 'GITOPS_PROJECT_PROD.DCM.GITOPS_PROJECT_PROD'
+    project_owner: DCM_PROD_DEPLOYER
+    templating_config: 'PROD'
+
+templating:
+  defaults:
+    env: DEV
+    env_suffix: '_DEV'
+    db: 'GITOPS_PROJECT_DEV'
+    wh_size: 'XSMALL'
+    dt_lag: '1 hour'
+    retention_days: 7
+  configurations:
+    DEV:
+      env: 'DEV'
+      env_suffix: '_DEV'
+      db: 'GITOPS_PROJECT_DEV'
+      wh_size: 'XSMALL'
+      dt_lag: '1 hour'
+      retention_days: 7
+    TEST:
+      env: 'TEST'
+      env_suffix: '_TEST'
+      db: 'GITOPS_PROJECT_TEST'
+      wh_size: 'SMALL'
+      dt_lag: '30 minutes'
+      retention_days: 14
+    PROD:
+      env: 'PROD'
+      env_suffix: '_PROD'
+      db: 'GITOPS_PROJECT_PROD'
+      wh_size: 'MEDIUM'
+      dt_lag: '10 minutes'
+      retention_days: 90

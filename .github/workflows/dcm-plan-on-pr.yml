@@ -1,0 +1,134 @@
+name: DCM Plan on PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'manifest.yml'
+      - 'sources/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan-test:
+    name: Plan TEST (SVC_GITHUB_DCM_TEST)
+    runs-on: ubuntu-latest
+    environment: DCM_TEST
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Snowflake CLI
+        uses: Snowflake-Labs/snowflake-cli-action@v1
+        with:
+          cli-version: 'latest'
+
+      - name: Authenticate via OIDC
+        run: |
+          snow connection add \
+            --connection-name dcm_test \
+            --account ${{ vars.SNOWFLAKE_ACCOUNT }} \
+            --user ${{ vars.SNOWFLAKE_USER }} \
+            --authenticator externalbrowser \
+            --role DCM_TEST_DEPLOYER \
+            --warehouse SNOWFLAKE_INTELLIGENCE_WH
+
+      - name: Run DCM Plan for TEST
+        run: snow dcm plan --target TEST --save-output -c dcm_test
+
+      - name: Upload Plan Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcm-plan-test
+          path: out/plan/
+
+      - name: Comment Plan Summary on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = '### DCM Plan - TEST\n\n';
+            try {
+              const plan = JSON.parse(fs.readFileSync('out/plan/plan_result.json', 'utf8'));
+              const changes = plan.changeset || [];
+              const creates = changes.filter(c => c.type === 'CREATE').length;
+              const alters = changes.filter(c => c.type === 'ALTER').length;
+              const drops = changes.filter(c => c.type === 'DROP').length;
+              summary += `| Action | Count |\n|---|---|\n`;
+              summary += `| CREATE | ${creates} |\n| ALTER | ${alters} |\n| DROP | ${drops} |\n\n`;
+              if (drops > 0) summary += '⚠️ **Warning: DROP operations detected!**\n';
+              else summary += '✅ No destructive changes.\n';
+            } catch (e) {
+              summary += '❌ Plan failed or output not found.\n';
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  plan-prod:
+    name: Plan PROD (SVC_GITHUB_DCM_PROD)
+    runs-on: ubuntu-latest
+    environment: DCM_PROD
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Snowflake CLI
+        uses: Snowflake-Labs/snowflake-cli-action@v1
+        with:
+          cli-version: 'latest'
+
+      - name: Authenticate via OIDC
+        run: |
+          snow connection add \
+            --connection-name dcm_prod \
+            --account ${{ vars.SNOWFLAKE_ACCOUNT }} \
+            --user ${{ vars.SNOWFLAKE_USER }} \
+            --authenticator externalbrowser \
+            --role DCM_PROD_DEPLOYER \
+            --warehouse SNOWFLAKE_INTELLIGENCE_WH
+
+      - name: Run DCM Plan for PROD
+        run: snow dcm plan --target PROD --save-output -c dcm_prod
+
+      - name: Upload Plan Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcm-plan-prod
+          path: out/plan/
+
+      - name: Comment Plan Summary on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = '### DCM Plan - PROD\n\n';
+            try {
+              const plan = JSON.parse(fs.readFileSync('out/plan/plan_result.json', 'utf8'));
+              const changes = plan.changeset || [];
+              const creates = changes.filter(c => c.type === 'CREATE').length;
+              const alters = changes.filter(c => c.type === 'ALTER').length;
+              const drops = changes.filter(c => c.type === 'DROP').length;
+              summary += `| Action | Count |\n|---|---|\n`;
+              summary += `| CREATE | ${creates} |\n| ALTER | ${alters} |\n| DROP | ${drops} |\n\n`;
+              if (drops > 0) summary += '⚠️ **Warning: DROP operations detected!**\n';
+              else summary += '✅ No destructive changes.\n';
+            } catch (e) {
+              summary += '❌ Plan failed or output not found.\n';
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });

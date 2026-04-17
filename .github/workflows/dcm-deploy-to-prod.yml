@@ -1,0 +1,138 @@
+name: DCM Deploy - TEST then PROD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'manifest.yml'
+      - 'sources/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-test:
+    name: Deploy to TEST (SVC_GITHUB_DCM_TEST)
+    runs-on: ubuntu-latest
+    environment: DCM_TEST
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Snowflake CLI
+        uses: Snowflake-Labs/snowflake-cli-action@v1
+        with:
+          cli-version: 'latest'
+
+      - name: Authenticate via OIDC
+        run: |
+          snow connection add \
+            --connection-name dcm_test \
+            --account ${{ vars.SNOWFLAKE_ACCOUNT }} \
+            --user ${{ vars.SNOWFLAKE_USER }} \
+            --authenticator externalbrowser \
+            --role DCM_TEST_DEPLOYER \
+            --warehouse SNOWFLAKE_INTELLIGENCE_WH
+
+      - name: Plan TEST
+        run: snow dcm plan --target TEST --save-output -c dcm_test
+
+      - name: Check for DROP operations
+        run: |
+          if grep -q '"type":"DROP"' out/plan/plan_result.json 2>/dev/null; then
+            echo "⚠️ DROP operations detected in TEST plan!"
+            echo "Review the plan output before proceeding."
+            cat out/plan/plan_result.json | python3 -m json.tool
+            exit 1
+          fi
+          echo "✅ No DROP operations. Safe to deploy."
+
+      - name: Deploy TEST
+        run: snow dcm deploy --target TEST --alias "gh-${{ github.sha }}" -c dcm_test
+
+      - name: Refresh Dynamic Tables
+        run: |
+          snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_TEST.ANALYTICS.DT_CUSTOMER_ORDERS REFRESH" -c dcm_test
+          snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_TEST.ANALYTICS.DT_DAILY_REVENUE REFRESH" -c dcm_test
+
+      - name: Validate Deployment
+        run: |
+          echo "--- Schemas ---"
+          snow sql -q "SHOW SCHEMAS IN DATABASE GITOPS_PROJECT_TEST" -c dcm_test
+          echo "--- Tables ---"
+          snow sql -q "SHOW TABLES IN SCHEMA GITOPS_PROJECT_TEST.RAW" -c dcm_test
+          echo "--- Dynamic Tables ---"
+          snow sql -q "SHOW DYNAMIC TABLES IN SCHEMA GITOPS_PROJECT_TEST.ANALYTICS" -c dcm_test
+          echo "--- Views ---"
+          snow sql -q "SHOW VIEWS IN SCHEMA GITOPS_PROJECT_TEST.SERVE" -c dcm_test
+
+      - name: Upload Deploy Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcm-deploy-test
+          path: out/
+
+  deploy-prod:
+    name: Deploy to PROD (SVC_GITHUB_DCM_PROD)
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    environment: DCM_PROD
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Snowflake CLI
+        uses: Snowflake-Labs/snowflake-cli-action@v1
+        with:
+          cli-version: 'latest'
+
+      - name: Authenticate via OIDC
+        run: |
+          snow connection add \
+            --connection-name dcm_prod \
+            --account ${{ vars.SNOWFLAKE_ACCOUNT }} \
+            --user ${{ vars.SNOWFLAKE_USER }} \
+            --authenticator externalbrowser \
+            --role DCM_PROD_DEPLOYER \
+            --warehouse SNOWFLAKE_INTELLIGENCE_WH
+
+      - name: Plan PROD
+        run: snow dcm plan --target PROD --save-output -c dcm_prod
+
+      - name: Check for DROP operations
+        run: |
+          if grep -q '"type":"DROP"' out/plan/plan_result.json 2>/dev/null; then
+            echo "⚠️ DROP operations detected in PROD plan!"
+            echo "Review the plan output before proceeding."
+            cat out/plan/plan_result.json | python3 -m json.tool
+            exit 1
+          fi
+          echo "✅ No DROP operations. Safe to deploy."
+
+      - name: Deploy PROD
+        run: snow dcm deploy --target PROD --alias "gh-${{ github.sha }}" -c dcm_prod
+
+      - name: Refresh Dynamic Tables
+        run: |
+          snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_PROD.ANALYTICS.DT_CUSTOMER_ORDERS REFRESH" -c dcm_prod
+          snow sql -q "ALTER DYNAMIC TABLE GITOPS_PROJECT_PROD.ANALYTICS.DT_DAILY_REVENUE REFRESH" -c dcm_prod
+
+      - name: Validate Deployment
+        run: |
+          echo "--- Schemas ---"
+          snow sql -q "SHOW SCHEMAS IN DATABASE GITOPS_PROJECT_PROD" -c dcm_prod
+          echo "--- Tables ---"
+          snow sql -q "SHOW TABLES IN SCHEMA GITOPS_PROJECT_PROD.RAW" -c dcm_prod
+          echo "--- Dynamic Tables ---"
+          snow sql -q "SHOW DYNAMIC TABLES IN SCHEMA GITOPS_PROJECT_PROD.ANALYTICS" -c dcm_prod
+          echo "--- Views ---"
+          snow sql -q "SHOW VIEWS IN SCHEMA GITOPS_PROJECT_PROD.SERVE" -c dcm_prod
+
+      - name: Upload Deploy Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcm-deploy-prod
+          path: out/
